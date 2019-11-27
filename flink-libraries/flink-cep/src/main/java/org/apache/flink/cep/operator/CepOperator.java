@@ -171,9 +171,9 @@ public class CepOperator<IN, KEY, OUT>
 
 		// initializeState through the provided context
 		computationStates = context.getKeyedStateStore().getState(
-				new ValueStateDescriptor<>(
-						NFA_STATE_NAME,
-						NFAStateSerializer.INSTANCE));
+			new ValueStateDescriptor<>(
+				NFA_STATE_NAME,
+				new NFAStateSerializer()));
 
 		partialMatches = new SharedBuffer<>(context.getKeyedStateStore(), inputSerializer);
 
@@ -226,7 +226,9 @@ public class CepOperator<IN, KEY, OUT>
 	@Override
 	public void close() throws Exception {
 		super.close();
-		nfa.close();
+		if (nfa != null) {
+			nfa.close();
+		}
 	}
 
 	@Override
@@ -290,12 +292,7 @@ public class CepOperator<IN, KEY, OUT>
 			elementsForTimestamp = new ArrayList<>();
 		}
 
-		if (getExecutionConfig().isObjectReuseEnabled()) {
-			// copy the StreamRecord so that it cannot be changed
-			elementsForTimestamp.add(inputSerializer.copy(event));
-		} else {
-			elementsForTimestamp.add(event);
-		}
+		elementsForTimestamp.add(event);
 		elementQueueState.put(currentTime, elementsForTimestamp);
 	}
 
@@ -533,7 +530,7 @@ public class CepOperator<IN, KEY, OUT>
 	@VisibleForTesting
 	boolean hasNonEmptyPQ(KEY key) throws Exception {
 		setCurrentKey(key);
-		return elementQueueState.keys().iterator().hasNext();
+		return !elementQueueState.isEmpty();
 	}
 
 	@VisibleForTesting

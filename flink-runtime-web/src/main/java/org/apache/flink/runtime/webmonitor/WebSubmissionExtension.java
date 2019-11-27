@@ -27,8 +27,9 @@ import org.apache.flink.runtime.webmonitor.handlers.JarDeleteHandler;
 import org.apache.flink.runtime.webmonitor.handlers.JarDeleteHeaders;
 import org.apache.flink.runtime.webmonitor.handlers.JarListHandler;
 import org.apache.flink.runtime.webmonitor.handlers.JarListHeaders;
+import org.apache.flink.runtime.webmonitor.handlers.JarPlanGetHeaders;
 import org.apache.flink.runtime.webmonitor.handlers.JarPlanHandler;
-import org.apache.flink.runtime.webmonitor.handlers.JarPlanHeaders;
+import org.apache.flink.runtime.webmonitor.handlers.JarPlanPostHeaders;
 import org.apache.flink.runtime.webmonitor.handlers.JarRunHandler;
 import org.apache.flink.runtime.webmonitor.handlers.JarRunHeaders;
 import org.apache.flink.runtime.webmonitor.handlers.JarUploadHandler;
@@ -77,6 +78,7 @@ public class WebSubmissionExtension implements WebMonitorExtension {
 			JarListHeaders.getInstance(),
 			localAddressFuture,
 			jarDir.toFile(),
+			configuration,
 			executor);
 
 		final JarRunHandler jarRunHandler = new JarRunHandler(
@@ -100,7 +102,17 @@ public class WebSubmissionExtension implements WebMonitorExtension {
 			leaderRetriever,
 			timeout,
 			responseHeaders,
-			JarPlanHeaders.getInstance(),
+			JarPlanGetHeaders.getInstance(),
+			jarDir,
+			configuration,
+			executor
+		);
+
+		final JarPlanHandler postJarPlanHandler = new JarPlanHandler(
+			leaderRetriever,
+			timeout,
+			responseHeaders,
+			JarPlanPostHeaders.getInstance(),
 			jarDir,
 			configuration,
 			executor
@@ -110,7 +122,8 @@ public class WebSubmissionExtension implements WebMonitorExtension {
 		webSubmissionHandlers.add(Tuple2.of(JarListHeaders.getInstance(), jarListHandler));
 		webSubmissionHandlers.add(Tuple2.of(JarRunHeaders.getInstance(), jarRunHandler));
 		webSubmissionHandlers.add(Tuple2.of(JarDeleteHeaders.getInstance(), jarDeleteHandler));
-		webSubmissionHandlers.add(Tuple2.of(JarPlanHeaders.getInstance(), jarPlanHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarPlanGetHeaders.getInstance(), jarPlanHandler));
+		webSubmissionHandlers.add(Tuple2.of(JarPlanGetHeaders.getInstance(), postJarPlanHandler));
 	}
 
 	@Override

@@ -52,7 +52,6 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -213,8 +212,6 @@ public class KinesisProxy implements KinesisProxyInterface {
 	/**
 	 * Create the Kinesis client, using the provided configuration properties and default {@link ClientConfiguration}.
 	 * Derived classes can override this method to customize the client configuration.
-	 * @param configProps
-	 * @return
 	 */
 	protected AmazonKinesis createKinesisClient(Properties configProps) {
 
@@ -253,7 +250,7 @@ public class KinesisProxy implements KinesisProxyInterface {
 					long backoffMillis = fullJitterBackoff(
 						getRecordsBaseBackoffMillis, getRecordsMaxBackoffMillis, getRecordsExpConstant, retryCount++);
 					LOG.warn("Got recoverable SdkClientException. Backing off for "
-						+ backoffMillis + " millis (" + ex.getMessage() + ")");
+						+ backoffMillis + " millis (" + ex.getClass().getName() + ": " + ex.getMessage() + ")");
 					Thread.sleep(backoffMillis);
 				} else {
 					throw ex;
@@ -262,8 +259,8 @@ public class KinesisProxy implements KinesisProxyInterface {
 		}
 
 		if (getRecordsResult == null) {
-			throw new RuntimeException("Rate Exceeded for getRecords operation - all " + getRecordsMaxRetries +
-				" retry attempts returned ProvisionedThroughputExceededException.");
+			throw new RuntimeException("Retries exceeded for getRecords operation - all " + getRecordsMaxRetries +
+				" retry attempts failed.");
 		}
 
 		return getRecordsResult;
@@ -328,7 +325,7 @@ public class KinesisProxy implements KinesisProxyInterface {
 					long backoffMillis = fullJitterBackoff(
 						getShardIteratorBaseBackoffMillis, getShardIteratorMaxBackoffMillis, getShardIteratorExpConstant, retryCount++);
 					LOG.warn("Got recoverable AmazonServiceException. Backing off for "
-						+ backoffMillis + " millis (" + ex.getErrorMessage() + ")");
+						+ backoffMillis + " millis (" + ex.getClass().getName() + ": " + ex.getMessage() + ")");
 					Thread.sleep(backoffMillis);
 				} else {
 					throw ex;
@@ -337,8 +334,8 @@ public class KinesisProxy implements KinesisProxyInterface {
 		}
 
 		if (getShardIteratorResult == null) {
-			throw new RuntimeException("Rate Exceeded for getShardIterator operation - all " + getShardIteratorMaxRetries +
-				" retry attempts returned ProvisionedThroughputExceededException.");
+			throw new RuntimeException("Retries exceeded for getShardIterator operation - all " + getShardIteratorMaxRetries +
+				" retry attempts failed.");
 		}
 		return getShardIteratorResult.getShardIterator();
 	}
@@ -474,18 +471,18 @@ public class KinesisProxy implements KinesisProxyInterface {
 				}
 			}
 		}
+
 		// Kinesalite (mock implementation of Kinesis) does not correctly exclude shards before
 		// the exclusive start shard id in the returned shards list; check if we need to remove
 		// these erroneously returned shards.
+		// Related issues:
+		// 	https://github.com/mhart/kinesalite/pull/77
+		// 	https://github.com/lyft/kinesalite/pull/4
 		if (startShardId != null && listShardsResults != null) {
 			List<Shard> shards = listShardsResults.getShards();
-			Iterator<Shard> shardItr = shards.iterator();
-			while (shardItr.hasNext()) {
-				if (StreamShardHandle.compareShardIds(shardItr.next().getShardId(), startShardId) <= 0) {
-					shardItr.remove();
-				}
-			}
+			shards.removeIf(shard -> StreamShardHandle.compareShardIds(shard.getShardId(), startShardId) <= 0);
 		}
+
 		return listShardsResults;
 	}
 

@@ -38,17 +38,19 @@ import org.apache.flink.runtime.jobmanager.Tasks.ExceptionReceiver;
 import org.apache.flink.runtime.jobmanager.Tasks.ExceptionSender;
 import org.apache.flink.runtime.jobmanager.Tasks.Forwarder;
 import org.apache.flink.runtime.jobmanager.Tasks.InstantiationErrorSender;
-import org.apache.flink.runtime.jobmanager.Tasks.Receiver;
-import org.apache.flink.runtime.jobmanager.Tasks.Sender;
 import org.apache.flink.runtime.jobmanager.scheduler.NoResourceAvailableException;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.jobmaster.JobResult;
+import org.apache.flink.runtime.jobmaster.TestingAbstractInvokables.Receiver;
+import org.apache.flink.runtime.jobmaster.TestingAbstractInvokables.Sender;
 import org.apache.flink.runtime.testtasks.BlockingNoOpInvokable;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.testtasks.WaitingNoOpInvokable;
+import org.apache.flink.testutils.junit.category.AlsoRunWithSchedulerNG;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -62,6 +64,7 @@ import static org.junit.Assert.fail;
 /**
  * Integration test cases for the {@link MiniCluster}.
  */
+@Category(AlsoRunWithSchedulerNG.class)
 public class MiniClusterITCase extends TestLogger {
 
 	@Test
@@ -110,7 +113,12 @@ public class MiniClusterITCase extends TestLogger {
 		} catch (JobExecutionException e) {
 			assertTrue(findThrowableWithMessage(e, "Job execution failed.").isPresent());
 			assertTrue(findThrowable(e, NoResourceAvailableException.class).isPresent());
-			assertTrue(findThrowableWithMessage(e, "Slots required: 2, slots allocated: 1").isPresent());
+
+			//TODO: remove the legacy scheduler message check once legacy scheduler is removed
+			final String legacySchedulerErrorMessage = "Slots required: 2, slots allocated: 1";
+			final String ngSchedulerErrorMessage = "Could not allocate the required slot within slot request timeout";
+			assertTrue(findThrowableWithMessage(e, legacySchedulerErrorMessage).isPresent() ||
+				findThrowableWithMessage(e, ngSchedulerErrorMessage).isPresent());
 		}
 	}
 
@@ -122,7 +130,12 @@ public class MiniClusterITCase extends TestLogger {
 		} catch (JobExecutionException e) {
 			assertTrue(findThrowableWithMessage(e, "Job execution failed.").isPresent());
 			assertTrue(findThrowable(e, NoResourceAvailableException.class).isPresent());
-			assertTrue(findThrowableWithMessage(e, "Could not allocate enough slots").isPresent());
+
+			//TODO: remove the legacy scheduler message check once legacy scheduler is removed
+			final String legacySchedulerErrorMessage = "Could not allocate enough slots";
+			final String ngSchedulerErrorMessage = "Could not allocate the required slot within slot request timeout";
+			assertTrue(findThrowableWithMessage(e, legacySchedulerErrorMessage).isPresent() ||
+				findThrowableWithMessage(e, ngSchedulerErrorMessage).isPresent());
 		}
 	}
 
@@ -319,7 +332,7 @@ public class MiniClusterITCase extends TestLogger {
 			receiver.setInvokableClass(AgnosticReceiver.class);
 			receiver.setParallelism(parallelism);
 
-			final SlotSharingGroup sharingGroup = new SlotSharingGroup(sender.getID(), receiver.getID());
+			final SlotSharingGroup sharingGroup = new SlotSharingGroup();
 			sender.setSlotSharingGroup(sharingGroup);
 			forwarder.setSlotSharingGroup(sharingGroup);
 			receiver.setSlotSharingGroup(sharingGroup);
@@ -571,7 +584,7 @@ public class MiniClusterITCase extends TestLogger {
 
 	private Configuration getDefaultConfiguration() {
 		final Configuration configuration = new Configuration();
-		configuration.setInteger(RestOptions.PORT, 0);
+		configuration.setString(RestOptions.BIND_PORT, "0");
 
 		return configuration;
 	}

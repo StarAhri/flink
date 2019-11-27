@@ -36,7 +36,6 @@ import org.apache.flink.streaming.connectors.kafka.internals.KafkaTopicPartition
 import org.apache.flink.streaming.connectors.kafka.internals.KafkaTopicsDescriptor;
 import org.apache.flink.streaming.util.AbstractStreamOperatorTestHarness;
 import org.apache.flink.streaming.util.OperatorSnapshotUtil;
-import org.apache.flink.streaming.util.serialization.KeyedDeserializationSchema;
 import org.apache.flink.testutils.migration.MigrationVersion;
 import org.apache.flink.util.SerializedValue;
 
@@ -55,6 +54,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -89,6 +89,12 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 		PARTITION_STATE.put(new KafkaTopicPartition("def", 7), 987654321L);
 	}
 
+	private static final List<String> TOPICS = new ArrayList<>(PARTITION_STATE.keySet())
+		.stream()
+		.map(p -> p.getTopic())
+		.distinct()
+		.collect(Collectors.toList());
+
 	private final MigrationVersion testMigrateVersion;
 
 	@Parameterized.Parameters(name = "Migration Savepoint: {0}")
@@ -99,7 +105,9 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 			MigrationVersion.v1_4,
 			MigrationVersion.v1_5,
 			MigrationVersion.v1_6,
-			MigrationVersion.v1_7);
+			MigrationVersion.v1_7,
+			MigrationVersion.v1_8,
+			MigrationVersion.v1_9);
 	}
 
 	public FlinkKafkaConsumerBaseMigrationTest(MigrationVersion testMigrateVersion) {
@@ -136,7 +144,7 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 		final List<KafkaTopicPartition> partitions = new ArrayList<>(PARTITION_STATE.keySet());
 
 		final DummyFlinkKafkaConsumer<String> consumerFunction =
-			new DummyFlinkKafkaConsumer<>(fetcher, partitions, FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
+			new DummyFlinkKafkaConsumer<>(fetcher, TOPICS, partitions, FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
 
 		StreamSource<String, DummyFlinkKafkaConsumer<String>> consumerOperator =
 				new StreamSource<>(consumerFunction);
@@ -193,6 +201,7 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 	public void testRestoreFromEmptyStateNoPartitions() throws Exception {
 		final DummyFlinkKafkaConsumer<String> consumerFunction =
 				new DummyFlinkKafkaConsumer<>(
+					Collections.singletonList("dummy-topic"),
 					Collections.<KafkaTopicPartition>emptyList(),
 					FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
 
@@ -232,7 +241,7 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 		final List<KafkaTopicPartition> partitions = new ArrayList<>(PARTITION_STATE.keySet());
 
 		final DummyFlinkKafkaConsumer<String> consumerFunction =
-			new DummyFlinkKafkaConsumer<>(partitions, FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
+			new DummyFlinkKafkaConsumer<>(TOPICS, partitions, FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
 
 		StreamSource<String, DummyFlinkKafkaConsumer<String>> consumerOperator =
 				new StreamSource<>(consumerFunction);
@@ -284,7 +293,7 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 		final List<KafkaTopicPartition> partitions = new ArrayList<>(PARTITION_STATE.keySet());
 
 		final DummyFlinkKafkaConsumer<String> consumerFunction =
-			new DummyFlinkKafkaConsumer<>(partitions, FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
+			new DummyFlinkKafkaConsumer<>(TOPICS, partitions, FlinkKafkaConsumerBase.PARTITION_DISCOVERY_DISABLED);
 
 		StreamSource<String, DummyFlinkKafkaConsumer<String>> consumerOperator =
 				new StreamSource<>(consumerFunction);
@@ -328,7 +337,7 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 		final List<KafkaTopicPartition> partitions = new ArrayList<>(PARTITION_STATE.keySet());
 
 		final DummyFlinkKafkaConsumer<String> consumerFunction =
-			new DummyFlinkKafkaConsumer<>(partitions, 1000L); // discovery enabled
+			new DummyFlinkKafkaConsumer<>(TOPICS, partitions, 1000L); // discovery enabled
 
 		StreamSource<String, DummyFlinkKafkaConsumer<String>> consumerOperator =
 			new StreamSource<>(consumerFunction);
@@ -364,13 +373,14 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 		@SuppressWarnings("unchecked")
 		DummyFlinkKafkaConsumer(
 				AbstractFetcher<T, ?> fetcher,
+				List<String> topics,
 				List<KafkaTopicPartition> partitions,
 				long discoveryInterval) {
 
 			super(
-				Arrays.asList("dummy-topic"),
+				topics,
 				null,
-				(KeyedDeserializationSchema< T >) mock(KeyedDeserializationSchema.class),
+				(KafkaDeserializationSchema< T >) mock(KafkaDeserializationSchema.class),
 				discoveryInterval,
 				false);
 
@@ -378,8 +388,8 @@ public class FlinkKafkaConsumerBaseMigrationTest {
 			this.partitions = partitions;
 		}
 
-		DummyFlinkKafkaConsumer(List<KafkaTopicPartition> partitions, long discoveryInterval) {
-			this(mock(AbstractFetcher.class), partitions, discoveryInterval);
+		DummyFlinkKafkaConsumer(List<String> topics, List<KafkaTopicPartition> partitions, long discoveryInterval) {
+			this(mock(AbstractFetcher.class), topics, partitions, discoveryInterval);
 		}
 
 		@Override
